@@ -13,19 +13,21 @@ download_uris = [
 
 
 def main():
+    # create the directory `downloads` if it doesn't exist
     os.makedirs("downloads", exist_ok=True)
     os.makedirs("save_data", exist_ok=True)
-    
+    # download the files one by one.
     file_names= [x.split("/")[-1] for x in download_uris]
     for uri, file_name in zip(download_uris,file_names):
         response=requests.get(uri)
         print(f"Downloading {file_name} from {uri}")
         if response.status_code==200:
+            # split out the filename from the uri, so the file keeps its original filename.
             with open (f"downloads/{file_name}","wb") as file:
                 file.write(response.content)
         else:
             print(f"Failed to download {uri}, status code: {response.status_code}")
-    
+    # Each file is a `zip`, extract the `csv` from the `zip` and delete the `zip` file.
     file_save=[]
     for file_name in file_names:
         name_file_save=file_name.replace(".zip", ".csv")
