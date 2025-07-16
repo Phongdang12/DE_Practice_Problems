@@ -1,6 +1,6 @@
 from datetime import timedelta
 from pyspark.sql import SparkSession, Window
-from pyspark.sql.functions import col, unix_timestamp, count, row_number, avg, when, initcap, date_format, desc, asc, lit
+import pyspark.sql.functions as F
 import zipfile
 import os
 import tempfile
@@ -25,7 +25,8 @@ def combination_of_question(directory_path, path_01, path_02, path_03, path_04, 
 def create_data_frame(directory_path):
     spark = SparkSession.builder.appName("Exercise6").getOrCreate()
     dataframes = []
-
+# không thể truyền đường dẫn CSV bên trong ZIP cho Spark(df = spark.read.csv("data/file.zip/inside_file.csv")  # ❌ Lỗi!
+# Mà phải đọc file csv rồi ghi ra một file tạm để nó đọc
     for filename in os.listdir(directory_path):
         if filename.endswith(".zip"):
             zip_file_path = os.path.join(directory_path, filename)
@@ -44,21 +45,21 @@ def create_data_frame(directory_path):
     for df in dataframes:
         if "trip_id" in df.columns:
             df=df.withColumnRenamed('birthyear','birth_year')\
-                 .withColumn('birth_year',col('birth_year').cast(IntegerType()))\
+                 .withColumn('birth_year',F.col('birth_year').cast(IntegerType()))\
                  .withColumnRenamed('bikeid','bike_id')\
-                 .withColumn('tripduration',col('tripduration').cast(DoubleType()))\
+                 .withColumn('tripduration',F.col('tripduration').cast(DoubleType()))\
                  .withColumnRenamed('tripduration','trip_duration')\
                  .withColumnRenamed('usertype','user_type')\
                  .withColumnRenamed('start_time','started_at')\
                  .withColumnRenamed('end_time','ended_at')\
                  .withColumnRenamed("from_station_name", "start_station_name")\
-                 .withColumn('gender', when(col('gender').isNull(),'Unknown').otherwise(col('gender')))\
-                 .withColumn('birth_year', when(col('birth_year').isNull(),'Unknown').otherwise(col('birth_year')))\
-                 .filter(col('trip_duration')>0)                     
+                 .withColumn('gender', F.when(F.col('gender').isNull(),'Unknown').otherwise(F.col('gender')))\
+                 .withColumn('birth_year', F.when(F.col('birth_year').isNull(),'Unknown').otherwise(F.col('birth_year')))\
+                 .filter(F.col('trip_duration')>0)                     
         if "ride_id" in df.columns:
-            df=df.withColumn('end_station_id',col('end_station_id').cast(IntegerType()))\
-                 .withColumn('rideable_type',initcap(col('rideable_type')))\
-                 .withColumn('trip_duration', (unix_timestamp('ended_at') - unix_timestamp('started_at')))
+            df=df.withColumn('end_station_id',F.col('end_station_id').cast(IntegerType()))\
+                 .withColumn('rideable_type',F.initcap(F.col('rideable_type')))\
+                 .withColumn('trip_duration', (F.unix_timestamp('ended_at') - F.unix_timestamp('started_at')))
         
         transformed_dataframes.append(df)
 
@@ -73,8 +74,8 @@ def avg_trip_duration_per_day(dataframes, output_path):
             combined_df = df
         else:
             combined_df = combined_df.union(df)
-    result=combined_df.groupBy(date_format("started_at","yyyy-MM-dd").alias("date"))\
-                .agg(avg("trip_duration").alias("avg_duration"))\
+    result=combined_df.groupBy(F.date_format("started_at","yyyy-MM-dd").alias("date"))\
+                .agg(F.avg("trip_duration").alias("avg_duration"))\
                 .orderBy("date")
 
     output_result(result, output_path, "trip_duration.csv")
@@ -90,8 +91,8 @@ def trips_per_day(dataframes, output_path):
         else:
             combined_df = combined_df.union(df)
 
-    result=combined_df.groupBy(date_format("started_at","yyyy-MM-dd").alias("date"))\
-                .agg(count("*").alias("trip_count"))\
+    result=combined_df.groupBy(F.date_format("started_at","yyyy-MM-dd").alias("date"))\
+                .agg(F.count("*").alias("trip_count"))\
                 .orderBy("date")
 
     output_result(result, output_path, "trips_per_day.csv")
@@ -107,11 +108,11 @@ def popular_month_station(dataframes, output_path):
         else:
             combined_df = combined_df.union(df)
 
-    per_month=combined_df.groupBy(date_format('started_at','yyyy-MM').alias('month'),col("start_station_name"))\
-                .agg(count("*").alias("trip_count"))
-    window_spec=Window.partitionBy("month").orderBy(desc("trip_count"))
-    result=per_month.withColumn("rank_desc",row_number().over(window_spec))\
-                    .filter(col("rank_desc")==1).select("month","start_station_name","trip_count")
+    per_month=combined_df.groupBy(F.date_format('started_at','yyyy-MM').alias('month'),F.col("start_station_name"))\
+                .agg(F.count("*").alias("trip_count"))
+    window_spec=Window.partitionBy("month").orderBy(F.desc("trip_count"))
+    result=per_month.withColumn("rank_desc",F.row_number().over(window_spec))\
+                    .filter(F.col("rank_desc")==1).select("month","start_station_name","trip_count")
 
     output_result(result, output_path, "popular_station_per_month.csv")
 
@@ -127,12 +128,12 @@ def top_station_by_day(dataframes, output_path):
 
         recent_df = filter_last_two_weeks(combined_df, "started_at")
 
-        daily_station_counts=recent_df.groupBy(date_format("started_at","yyyy-MM-dd").alias("date"),col("start_station_name"))\
-                                      .agg(count("*").alias("trip_count"))
+        daily_station_counts=recent_df.groupBy(F.date_format("started_at","yyyy-MM-dd").alias("date"),F.col("start_station_name"))\
+                                      .agg(F.count("*").alias("trip_count"))
         
-        window_spec=Window.partitionBy("date").orderBy(desc("trip_count"))
-        result=daily_station_counts.withColumn("rank",row_number().over(window_spec))\
-                                   .filter(col("rank")<=3)\
+        window_spec=Window.partitionBy("date").orderBy(F.desc("trip_count"))
+        result=daily_station_counts.withColumn("rank",F.row_number().over(window_spec))\
+                                   .filter(F.col("rank")<=3)\
                                    .select("date","start_station_name","trip_count","rank")\
                                    .orderBy("date","rank")
 
@@ -148,10 +149,10 @@ def longest_trips(dataframes, output_path):
     for df in dataframes:
         if "trip_id" in df.columns:
             df_filtered = df.select("trip_duration","gender")
-            result=df_filtered.filter(col("gender").isin("Male","Female"))\
+            result=df_filtered.filter(F.col("gender").isin("Male","Female"))\
                 .groupBy("gender")\
-                .agg(avg("trip_duration").alias("avg_duration"))\
-                .orderBy(desc("avg_duration"))
+                .agg(F.avg("trip_duration").alias("avg_duration"))\
+                .orderBy(F.desc("avg_duration"))
             break
 
     if result:
@@ -166,19 +167,19 @@ def top_ages(dataframes, output_path):
         if "trip_id" in df.columns:
             df_filtered = df.select("trip_duration","birth_year")
 
-            df_with_age = df_filtered.filter(col("birth_year") != "Unknown")\
-                       .withColumn("age", 2020 - col("birth_year"))
+            df_with_age = df_filtered.filter(F.col("birth_year") != "Unknown")\
+                       .withColumn("age", 2020 - F.col("birth_year"))
     
             avg_duration_by_age = df_with_age.groupBy("age")\
-                                     .agg(avg("trip_duration").alias("avg_duration"))
+                                     .agg(F.avg("trip_duration").alias("avg_duration"))
     
-            longest_trips = avg_duration_by_age.orderBy(desc("avg_duration"))\
+            longest_trips = avg_duration_by_age.orderBy(F.desc("avg_duration"))\
                                        .limit(10)\
-                                       .withColumn("trip_type", lit("longest"))
+                                       .withColumn("trip_type", F.lit("longest"))
     
-            shortest_trips = avg_duration_by_age.orderBy(asc("avg_duration"))\
+            shortest_trips = avg_duration_by_age.orderBy(F.asc("avg_duration"))\
                                         .limit(10)\
-                                        .withColumn("trip_type", lit("shortest"))
+                                        .withColumn("trip_type", F.lit("shortest"))
     
             result = longest_trips.union(shortest_trips)
             break
@@ -188,12 +189,18 @@ def top_ages(dataframes, output_path):
     else:
         print("No data found for top_ages analysis")
 
-
+# Spark thường chia dữ liệu thành nhiều phần để xử lý song song
+# Nếu không có coalesce(1), Spark sẽ tạo ra nhiều file CSV (mỗi partition một file)
 def output_result(result, output_path, name):
     try:
         result.coalesce(1).write.option("header", "true").csv(output_path)
 
         files = os.listdir(output_path)
+#         output_path/
+# ├── part-00000-xxx.csv  ← File CSV thực tế (tên random)
+# ├── _SUCCESS            ← File báo hiệu ghi thành công
+# └── .crc files          ← File checksum (có thể có)
+# ->dọn dẹp các file không cần thiết
         for file in files:
             if file.endswith(".csv"):
                 csv_file_path = os.path.join(output_path, file)
@@ -211,10 +218,10 @@ def output_result(result, output_path, name):
 
 def filter_last_two_weeks(df, start):
     try:
-        max_date = df.agg({df:"max"}).collect()[0][0]
+        max_date = df.agg({start: "max"}).collect()[0][0]
         end_date = max_date
         start_date = max_date - timedelta(days=14)
-        filtered_data = df.filter((col(start) >= start_date) & (col(start) <= end_date))
+        filtered_data = df.filter((F.col(start) >= start_date) & (F.col(start) <= end_date))
         return filtered_data
     except Exception as e:
         print(e)
