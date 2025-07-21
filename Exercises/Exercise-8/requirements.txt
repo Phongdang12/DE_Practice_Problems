@@ -1,2 +1,4 @@
 pytest
-duckdb
+duckdb==0.7.1
+pandas
+pyarrow
