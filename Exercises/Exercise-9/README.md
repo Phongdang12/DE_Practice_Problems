@@ -31,7 +31,7 @@ Your job is to use the `Lazy` functionality of `Polars` to work on this data in 
 
 1. Read the provided `CSV` file into a lazy Dataframe.
 
-3. Calculate the following analytics/problems.
+2. Calculate the following analytics/problems.
  - Convert all data types to the correct ones.
  - Count the number bike rides per day.
  - Calculate the average, max, and minimum number of rides per week of the dataset.

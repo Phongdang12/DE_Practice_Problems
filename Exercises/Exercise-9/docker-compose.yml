@@ -3,10 +3,12 @@ services:
     test:
       image: "exercise-9"
       volumes:
-        - .:/app
-      command: python3 -m pytest
+        - ./data:/app/data
+        - ./main.py:/app/main.py
+      command: python3.8 -m pytest
     run:
       image: "exercise-9"
       volumes:
-        - .:/app
-      command: python3 main.py
+        - ./data:/app/data
+        - ./main.py:/app/main.py
+      command: python3.8 main.py
